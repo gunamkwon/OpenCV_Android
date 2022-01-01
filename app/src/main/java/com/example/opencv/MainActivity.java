@@ -8,16 +8,26 @@ import android.os.Bundle;
 import android.annotation.TargetApi;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Environment;
 import android.util.Log;
 import android.view.SurfaceView;
+import android.view.View;
 import android.view.WindowManager;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.features2d.MSER;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
 
+import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 import static android.Manifest.permission.CAMERA;
@@ -32,7 +42,9 @@ public class MainActivity extends AppCompatActivity
     private Mat matInput;
     private Mat matResult;
 
-    private CameraBridgeViewBase mOpenCvCameraView;
+    private CameraBridgeViewBase mOpenCvCameraBackView;
+    private int mCameraId = 0;
+    private int takeImage;
 
     public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
 
@@ -50,7 +62,7 @@ public class MainActivity extends AppCompatActivity
             switch (status) {
                 case LoaderCallbackInterface.SUCCESS:
                 {
-                    mOpenCvCameraView.enableView();
+                    mOpenCvCameraBackView.enableView();
                 } break;
                 default:
                 {
@@ -74,19 +86,42 @@ public class MainActivity extends AppCompatActivity
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        //binding.surfaceView;
-        mOpenCvCameraView = (CameraBridgeViewBase)findViewById(R.id.surface_view);
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-        mOpenCvCameraView.setCvCameraViewListener(this);
-        mOpenCvCameraView.setCameraIndex(0); // front-camera(1),  back-camera(0)
+        binding.btnFlip.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                swapCamera();
+            }
+        });
+        binding.btnCapture.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(takeImage == 0)
+                    takeImage = 1;
+                else
+                    takeImage = 0;
+            }
+        });
+
+        mOpenCvCameraBackView = binding.surfaceViewBack;
+        mOpenCvCameraBackView.setVisibility(SurfaceView.VISIBLE);
+        mOpenCvCameraBackView.setCvCameraViewListener(this);
+        mOpenCvCameraBackView.setCameraIndex(mCameraId); // front-camera(1),  back-camera(0)
+    }
+
+    private void swapCamera() {
+        mCameraId = mCameraId^1;
+
+        mOpenCvCameraBackView.disableView();
+        mOpenCvCameraBackView.setCameraIndex(mCameraId);
+        mOpenCvCameraBackView.enableView();
     }
 
     @Override
     public void onPause()
     {
         super.onPause();
-        if (mOpenCvCameraView != null)
-            mOpenCvCameraView.disableView();
+        if (mOpenCvCameraBackView != null)
+            mOpenCvCameraBackView.disableView();
     }
 
     @Override
@@ -107,18 +142,18 @@ public class MainActivity extends AppCompatActivity
     public void onDestroy() {
         super.onDestroy();
 
-        if (mOpenCvCameraView != null)
-            mOpenCvCameraView.disableView();
+        if (mOpenCvCameraBackView != null)
+            mOpenCvCameraBackView.disableView();
     }
 
     @Override
     public void onCameraViewStarted(int width, int height) {
-
+        matInput = new Mat(height,width, CvType.CV_8UC4);
     }
 
     @Override
     public void onCameraViewStopped() {
-
+        matInput.release();
     }
 
     @Override
@@ -127,17 +162,47 @@ public class MainActivity extends AppCompatActivity
         matInput = inputFrame.rgba();
 
         if ( matResult == null )
-
             matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
 
         ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
 
-        return matResult;
+        if(mCameraId == 1) {
+            Core.flip(matInput,matInput,-1);
+        }
+
+        takeImage = takePictureRGB(takeImage, matInput);
+        return matInput;
     }
 
+    private int takePictureRGB(int takeImage, Mat input) {
+        if(takeImage==1) {
+            // Create New mat
+            Mat saveMat = new Mat();
+            // Rotate Image
+            Core.flip(input.t(), saveMat, 1);
+            // Convert Image RGBA to BGRA
+            Imgproc.cvtColor(saveMat, saveMat, Imgproc.COLOR_RGBA2BGRA);
+
+            // Save Image
+            File folder = new File(Environment.getExternalStorageDirectory().getPath() + "/ImagePro");
+            if (!folder.exists()) {
+                folder.mkdirs();
+            }
+
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
+            String currentDateAndTime = sdf.format(new Date());
+            String fileName = Environment.getExternalStorageDirectory().getPath() + "/ImagePro" +
+                currentDateAndTime + ".jpg";
+
+            Imgcodecs.imwrite(fileName, saveMat);
+            takeImage = 0;
+        }
+
+        return takeImage;
+    }
 
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
-        return Collections.singletonList(mOpenCvCameraView);
+        return Collections.singletonList(mOpenCvCameraBackView);
     }
 
 

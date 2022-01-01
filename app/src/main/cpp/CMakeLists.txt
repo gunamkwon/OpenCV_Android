@@ -5,7 +5,8 @@
 
 cmake_minimum_required(VERSION 3.4.1)
 
-set(pathPROJECT C:/Users/GNKwon0302/OpenCV_Android) # 수정필요
+set(pathPROJECT "C:/Users/Gu-nam Kwon/OpenCV") # 수정필요
+#set(pathPROJECT C:/Users/GNKwon0302/OpenCV_Android) # 수정필요
 set(pathOPENCV ${pathPROJECT}/sdk)
 set(pathLIBOPENCV_JAVA ${pathOPENCV}/native/libs/${ANDROID_ABI}/libopencv_java4.so)
 

@@ -1,6 +1,8 @@
 #include <jni.h>
 //#include <string>
 #include <opencv2/opencv.hpp>
+#include <jni.h>
+#include <jni.h>
 
 using namespace cv;
 
@@ -21,3 +23,4 @@ Java_com_example_opencv_MainActivity_ConvertRGBtoGray(JNIEnv *env, jobject thiz,
 
     cvtColor(matInput, matResult, COLOR_RGBA2GRAY);
 }
+
