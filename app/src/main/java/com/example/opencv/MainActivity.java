@@ -4,6 +4,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.annotation.TargetApi;
 import android.content.pm.PackageManager;
@@ -31,6 +33,8 @@ import java.util.Date;
 import java.util.List;
 
 import static android.Manifest.permission.CAMERA;
+import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
+import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
 
 import com.example.opencv.databinding.ActivityMainBinding;
 
@@ -45,6 +49,8 @@ public class MainActivity extends AppCompatActivity
     private CameraBridgeViewBase mOpenCvCameraBackView;
     private int mCameraId = 0;
     private int takeImage;
+
+    PermissionSupport permission;
 
     public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
 
@@ -101,6 +107,15 @@ public class MainActivity extends AppCompatActivity
                     takeImage = 0;
             }
         });
+
+        binding.btnGallery.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent mIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("content://media/internal/images/media"));
+                startActivity(mIntent);
+            }
+        });
+
 
         mOpenCvCameraBackView = binding.surfaceViewBack;
         mOpenCvCameraBackView.setVisibility(SurfaceView.VISIBLE);
@@ -161,16 +176,20 @@ public class MainActivity extends AppCompatActivity
 
         matInput = inputFrame.rgba();
 
-        if ( matResult == null )
+        /*if ( matResult == null )
             matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
 
-        ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
+        ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());*/
 
+        // Flip Camera
         if(mCameraId == 1) {
             Core.flip(matInput,matInput,-1);
         }
 
+
         takeImage = takePictureRGB(takeImage, matInput);
+
+
         return matInput;
     }
 
@@ -194,6 +213,7 @@ public class MainActivity extends AppCompatActivity
             String fileName = Environment.getExternalStorageDirectory().getPath() + "/ImagePro" +
                 currentDateAndTime + ".jpg";
 
+            Log.d("OpenCV","Save: " + fileName);
             Imgcodecs.imwrite(fileName, saveMat);
             takeImage = 0;
         }
@@ -204,10 +224,6 @@ public class MainActivity extends AppCompatActivity
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
         return Collections.singletonList(mOpenCvCameraBackView);
     }
-
-
-    //여기서부턴 퍼미션 관련 메소드
-    private static final int CAMERA_PERMISSION_REQUEST_CODE = 200;
 
 
     protected void onCameraPermissionGranted() {
@@ -225,14 +241,17 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onStart() {
         super.onStart();
-        boolean havePermission = true;
+        boolean haveCameraPermission = true;
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (checkSelfPermission(CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
-                havePermission = false;
+                permission = new PermissionSupport(this,this);
+
+                if(!permission.checkPermission()) {
+                    permission.requestPermission();
             }
         }
-        if (havePermission) {
+
+        if (haveCameraPermission) {
             onCameraPermissionGranted();
         }
     }
@@ -240,34 +259,12 @@ public class MainActivity extends AppCompatActivity
     @Override
     @TargetApi(Build.VERSION_CODES.M)
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE && grantResults.length > 0
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            onCameraPermissionGranted();
-        }else{
-            showDialogForPermission("앱을 실행하려면 퍼미션을 허가하셔야합니다.");
+
+        if(!permission.permissionResult(requestCode, permissions, grantResults)) {
+            permission.showDialogForPermission("앱을 실행하려면 권한을 허가하셔야합니다.", requestCode);
         }
+
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-    }
-
-
-    @TargetApi(Build.VERSION_CODES.M)
-    private void showDialogForPermission(String msg) {
-
-        AlertDialog.Builder builder = new AlertDialog.Builder( MainActivity.this);
-        builder.setTitle("알림");
-        builder.setMessage(msg);
-        builder.setCancelable(false);
-        builder.setPositiveButton("예", new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int id){
-                requestPermissions(new String[]{CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
-            }
-        });
-        builder.setNegativeButton("아니오", new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface arg0, int arg1) {
-                finish();
-            }
-        });
-        builder.create().show();
     }
 
 
