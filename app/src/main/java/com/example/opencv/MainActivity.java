@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.AssetManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.annotation.TargetApi;
@@ -25,8 +26,12 @@ import org.opencv.core.Mat;
 import org.opencv.features2d.MSER;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.objdetect.CascadeClassifier;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
@@ -49,18 +54,20 @@ public class MainActivity extends AppCompatActivity
     private CameraBridgeViewBase mOpenCvCameraBackView;
     private int mCameraId = 0;
     private int takeImage;
+    public long cascadeClassifier_face, cascadeClassifier_eye;
+
 
     PermissionSupport permission;
 
-    public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
 
-
+    public native void convertRGBtoGray(long matAddrInput, long matAddrResult);
+    //public native void detectAndDraw(long matAddrInput, long cascadeAddr, long nestedCascasdeAddr, double scale, boolean tryFlip, long matAddrOutput);
+    public native void detect(long cascadeClassifier_face, long cascadeClassifier_eye, long matAddrInput, long matAddrResult);
+    public native long loadCascade(String cascadeFileName);
     static {
         System.loadLibrary("opencv_java4");
         System.loadLibrary("native-lib");
     }
-
-
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -175,22 +182,25 @@ public class MainActivity extends AppCompatActivity
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
         matInput = inputFrame.rgba();
-
-        /*if ( matResult == null )
-            matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
-
-        ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());*/
+        /*ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());*/
 
         // Flip Camera
         if(mCameraId == 1) {
             Core.flip(matInput,matInput,-1);
         }
 
-
+        // Take Picture
         takeImage = takePictureRGB(takeImage, matInput);
 
+        // TODO: Detect And Sunglasses Draw
+        // TODO: xml 문서 가져와서 detect and draw 실행
+        // TODO: glass 이미지는 안에서 가져오기
+        if ( matResult == null )
+            matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
 
-        return matInput;
+        detect(cascadeClassifier_face, cascadeClassifier_eye, matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
+
+        return matResult;
     }
 
     private int takePictureRGB(int takeImage, Mat input) {
@@ -215,6 +225,7 @@ public class MainActivity extends AppCompatActivity
 
             Log.d("OpenCV","Save: " + fileName);
             Imgcodecs.imwrite(fileName, saveMat);
+
             takeImage = 0;
         }
 
@@ -234,6 +245,8 @@ public class MainActivity extends AppCompatActivity
         for (CameraBridgeViewBase cameraBridgeViewBase: cameraViews) {
             if (cameraBridgeViewBase != null) {
                 cameraBridgeViewBase.setCameraPermissionGranted();
+
+                readCascadeFile();
             }
         }
     }
@@ -267,5 +280,40 @@ public class MainActivity extends AppCompatActivity
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 
+    private void copyFile(String fileName) {
+        String baseDir = Environment.getExternalStorageDirectory().getPath();
+        String pathDir = baseDir + File.separator + fileName;
+
+        AssetManager assetManager = this.getAssets();
+
+        InputStream inputStream = null;
+        OutputStream outputStream = null;
+
+        try {
+            inputStream = assetManager.open(fileName);
+            outputStream = new FileOutputStream(pathDir);
+
+            byte[] buffer = new byte[1024];
+            int read;
+            while((read = inputStream.read(buffer)) != -1 ) {
+                outputStream.write(buffer, 0 ,read);
+            }
+            inputStream.close();
+            inputStream = null;
+            outputStream.flush();
+            outputStream.close();
+            outputStream = null;
+        } catch (Exception e) {
+            Log.d(TAG, "copyFile:: 파일 복사 중 예외 발생" + e.toString());
+        }
+    }
+
+    private void readCascadeFile() {
+        copyFile("haarcascade_frontalface_alt.xml");
+        copyFile("haarcascade_eye_tree_eyeglasses.xml");
+
+        cascadeClassifier_face = loadCascade("haarcascade_frontalface_alt.xml");
+        cascadeClassifier_eye = loadCascade("haarcascade_eye_tree_eyeglasses.xml");
+    }
 
 }
