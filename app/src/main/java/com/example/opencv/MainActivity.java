@@ -56,12 +56,11 @@ public class MainActivity extends AppCompatActivity
     private int takeImage;
     public long cascadeClassifier_face, cascadeClassifier_eye;
 
-
     PermissionSupport permission;
 
 
     public native void convertRGBtoGray(long matAddrInput, long matAddrResult);
-    //public native void detectAndDraw(long matAddrInput, long cascadeAddr, long nestedCascasdeAddr, double scale, boolean tryFlip, long matAddrOutput);
+    public native void detectAndDraw(long cascadeClassifier_face, long cascadeClassifier_eye, double scale, boolean tryFlip, long overlayImageAddr, long matAddrInput, long matAddrOutput);
     public native void detect(long cascadeClassifier_face, long cascadeClassifier_eye, long matAddrInput, long matAddrResult);
     public native long loadCascade(String cascadeFileName);
     static {
@@ -192,14 +191,13 @@ public class MainActivity extends AppCompatActivity
         // Take Picture
         takeImage = takePictureRGB(takeImage, matInput);
 
-        // TODO: Detect And Sunglasses Draw
-        // TODO: xml 문서 가져와서 detect and draw 실행
-        // TODO: glass 이미지는 안에서 가져오기
+        Mat matOverlay = Imgcodecs.imread("/storage/emulated/0/sunglasses.png", Imgcodecs.IMREAD_UNCHANGED);
         if ( matResult == null )
             matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
 
-        detect(cascadeClassifier_face, cascadeClassifier_eye, matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
-
+        //detect(cascadeClassifier_face, cascadeClassifier_eye, matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
+        detectAndDraw(cascadeClassifier_face, cascadeClassifier_eye, 1, false,
+                matOverlay.getNativeObjAddr(), matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
         return matResult;
     }
 
@@ -311,6 +309,7 @@ public class MainActivity extends AppCompatActivity
     private void readCascadeFile() {
         copyFile("haarcascade_frontalface_alt.xml");
         copyFile("haarcascade_eye_tree_eyeglasses.xml");
+        copyFile("sunglasses.png");
 
         cascadeClassifier_face = loadCascade("haarcascade_frontalface_alt.xml");
         cascadeClassifier_eye = loadCascade("haarcascade_eye_tree_eyeglasses.xml");

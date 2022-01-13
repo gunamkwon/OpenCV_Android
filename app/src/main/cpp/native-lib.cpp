@@ -13,7 +13,7 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_opencv_MainActivity_convertRGBtoGray(JNIEnv *env, jobject thiz,
                                                       jlong mat_addr_input, jlong mat_addr_result) {
-    // TODO: implement ConvertRGBtoGray()
+
     Mat &matInput = *(Mat *)mat_addr_input;
     Mat &matResult = *(Mat *)mat_addr_result;
 
@@ -25,21 +25,23 @@ Java_com_example_opencv_MainActivity_convertRGBtoGray(JNIEnv *env, jobject thiz,
  *
  *
  * */
-/*extern "C"
+extern "C"
 JNIEXPORT void JNICALL
-Java_com_example_opencv_MainActivity_detectAndDraw(JNIEnv *env, jobject thiz, jlong mat_addr_input,
-                                                   jlong cascade_addr, jlong nested_cascasde_addr,
+//(long cascadeClassifier_face, long cascadeClassifier_eye, double scale, boolean tryFlip, long overlayImageAddr, long matAddrInput, long matAddrOutput)
+Java_com_example_opencv_MainActivity_detectAndDraw(JNIEnv *env, jobject thiz,
+                                                   jlong cascade_classifier_face, jlong cascade_classifier_eye,
                                                    jdouble scale, jboolean try_flip,
-                                                   jlong mat_addr_output) {
+                                                   jlong overlay_img_addr, jlong mat_addr_input, jlong mat_addr_output) {
     // 주소값 변환
     Mat &matInput = *(Mat *)mat_addr_input;
-    CascadeClassifier &cascade = *(CascadeClassifier *)cascade_addr;
-    CascadeClassifier &nestedCascade = *(CascadeClassifier *)nested_cascasde_addr;
+    CascadeClassifier &cascade = *(CascadeClassifier *)cascade_classifier_face;
+    CascadeClassifier &nestedCascade = *(CascadeClassifier *)cascade_classifier_eye;
     Mat &matOutput = *(Mat *)mat_addr_output;
 
-    Mat glasses; // TODO: = imread();
-    Mat output2;
+    // glass 이미지 가져오기
+    Mat &glasses = *(Mat *)overlay_img_addr; //
 
+    Mat output2;
     matInput.copyTo(output2);
 
     double t = 0;
@@ -56,24 +58,25 @@ Java_com_example_opencv_MainActivity_detectAndDraw(JNIEnv *env, jobject thiz, jl
     };
 
     Mat gray,smallImg;
-    ctvColor(matInput, , COLOR_BGR2GRAY);
+    cvtColor(matInput, gray, COLOR_BGR2GRAY);
     double fx = 1 / scale;
     resize(gray, smallImg, Size(), fx, fx, INTER_LINEAR_EXACT);
     equalizeHist(smallImg, smallImg);
 
+    // Detect Face
     t = (double)getTickCount();
     cascade.detectMultiScale(smallImg, faces,
-                             1.1, 2, 0
+                             1.1, 3, 0
                                      //|CASCADE_FIND_BIGGEST_OBJECT
                                      //|CASCADE_DO_ROUGH_SEARCH
                                      | CASCADE_SCALE_IMAGE,
-                             Size(30, 30)); // 얼굴위치 검출
-
+                             Size(30, 30));
     t = (double)getTickCount() - t;
 
-    Mat result;
+    __android_log_print(ANDROID_LOG_DEBUG, (char *) "native-lib :: ",
+                        (char *) "face %d found / detection time = %g ms", faces.size(), t * 1000 / getTickFrequency());
 
-    printf("detection time = %g ms\n", t * 1000 / getTickFrequency());
+    Mat result;
     for(size_t i = 0; i < faces.size(); i++) {
         Rect r = faces[i];
         Mat smallImgROI;
@@ -98,21 +101,22 @@ Java_com_example_opencv_MainActivity_detectAndDraw(JNIEnv *env, jobject thiz, jl
         }
 
         if (nestedCascade.empty()) {
-            cout << "nestedCascade.empty()" << endl;
+            __android_log_print(ANDROID_LOG_DEBUG, (char *) "native-lib :: ",
+                                (char *) "nestedCascade empty()");
             continue;
         }
 
         smallImgROI = smallImg(r);
         nestedCascade.detectMultiScale(smallImgROI, nestedObjects,
-                                       1.1, 2, 0
+                                       1.1, 3, 0
                                                //|CASCADE_FIND_BIGGEST_OBJECT
                                                //|CASCADE_DO_ROUGH_SEARCH
                                                //|CASCADE_DO_CANNY_PRUNING
                                                | CASCADE_SCALE_IMAGE,
                                        Size(20, 20)); // 눈위치 검출
 
-
-        //cout << nestedObjects.size() << endl;
+        __android_log_print(ANDROID_LOG_DEBUG, (char *) "native-lib :: ",
+                            (char *) "nestedObjects Size: %d", nestedObjects.size());
 
         vector<Point> points;
         for (size_t j = 0; j < nestedObjects.size(); j++) {
@@ -125,9 +129,8 @@ Java_com_example_opencv_MainActivity_detectAndDraw(JNIEnv *env, jobject thiz, jl
             Point p(center.x, center.y);
             points.push_back(p);
         } // 눈위치에 원 그림
-
+        
         if (points.size() == 2) {
-
             Point center1 = points[0];
             Point center2 = points[1];
 
@@ -159,9 +162,19 @@ Java_com_example_opencv_MainActivity_detectAndDraw(JNIEnv *env, jobject thiz, jl
                 output2 = result;
             }
         }
-
     }
-}*/
+
+
+    if(result.empty()){
+        __android_log_print(ANDROID_LOG_DEBUG,  (char *) "native-lib :: ",
+                            (char *) "Overlay Result is Empty()");
+        matOutput = matInput.clone();
+    } else{
+        matOutput = output2.clone();
+    }
+
+
+}
 
 void overlayImage(const Mat &background, const Mat &foreground,Mat &output, Point2i location) {
     background.copyTo(output);
@@ -188,7 +201,7 @@ void overlayImage(const Mat &background, const Mat &foreground,Mat &output, Poin
                 break;
             }
 
-            // determine the opacity of the foregrond pixel, using its fourth (alpha) channel.
+            // determine the opacity of the foreground pixel, using its fourth (alpha) channel.
             double opacity =
                     ((double)foreground.data[fY * foreground.step + fX * foreground.channels() + 3])
 
@@ -294,7 +307,7 @@ Java_com_example_opencv_MainActivity_detect(JNIEnv *env, jobject thiz,
         ((CascadeClassifier *) cascade_classifier_eye)->detectMultiScale( faceROI, eyes, 1.1, 3, 0 |CASCADE_SCALE_IMAGE, Size(10, 10) );
 
         __android_log_print(ANDROID_LOG_DEBUG, (char *) "native-lib :: ",
-                            (char *) "eyes %d found ", eyes.size());
+                            (char *) "face %d found ", faces.size());
 
         for ( size_t j = 0; j < eyes.size(); j++ )
         {
